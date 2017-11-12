@@ -36,8 +36,9 @@ def gen_batches(data, batch_size):
 class RBM(object):
     """ represents a 3-way rbm """
 
-    def __init__(self, name, v1_size, h_size, v2_size, n_data, batch_size, num_epochs=100, learning_rate=0.1, k=1,
-                 use_tqdm=True, show_err_plt=True,n_factors=50):
+    def __init__(self, name, v1_size, h_size, v2_size, n_data, batch_size, num_epochs=100, learning_rate=0.1, k=1, use_tqdm=True, show_err_plt=True, n_factors=50):
+        
+        
         with tf.name_scope("rbm_" + name):
             self.v1_size = v1_size
             self.v2_size = v2_size
