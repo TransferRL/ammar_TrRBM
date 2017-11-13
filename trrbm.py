@@ -153,7 +153,7 @@ class RBM(object):
             if np.isnan(self.cost[-1]) == True:
                 raise RuntimeError('Training has diverged - lower learning rate!')
             # early stopping
-            if i > 20 and np.mean(self.cost[-20:-10]) - np.mean(self.cost[-10:]) < np.mean(self.cost[-20:]) * 0.01:
+            if i > 20 and np.mean(self.cost[-40:-20]) - np.mean(self.cost[-20:]) < np.mean(self.cost[-40:]) * 0.005:
                 break
 
         return self.cost

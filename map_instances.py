@@ -3,7 +3,9 @@ import tensorflow as tf
 import trrbm
 import pickle
 from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import StandardScaler
 from matplotlib import pyplot as plt
+
 
 def load_samples(path):
     with open(path, "rb") as f:
@@ -39,12 +41,15 @@ def even_out_samplesizes(samples1, samples2):
         samples2 = samples2[:len(samples1)]
         
     return samples1, samples2
+
+def standardize_samples(samples):
+    return StandardScaler().fit_transform(samples)
     
 def main():
     
     source_random_path = '../taylor_master/data/2d_instances.pkl'
     target_random_path = '../taylor_master/data/3d_instances.pkl'
-    source_optimal_path = ''
+    source_optimal_path = '../taylor_master/data/2d_instances.pkl'
 
     # load source task random samples
     source_random = unpack_samples(load_samples(source_random_path))
@@ -54,6 +59,7 @@ def main():
     
     # prepare samples
     source_random, target_random = even_out_samplesizes(source_random, target_random)
+    s
 
     # load the model
 
@@ -72,7 +78,7 @@ def main():
         show_err_plt = True
     )
 
-    # train model
+    # train TrRBM model
     errs = rbm.train(source_random, target_random)
     
     if rbm.show_err_plt:
@@ -83,6 +89,7 @@ def main():
         plt.show()
 
     # load source task optimal instances
+    source_optimal = 
     
 
     # map to target instances
