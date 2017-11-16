@@ -11,10 +11,13 @@ class q_network(object):
     """
     
     def __init__(self
-                 ,discount_rate = 0.9
-                 ,mem_size = 5000
-                 ,sample_size = 1000
+                 ,discount_rate
+                 ,mem_size
+                 ,sample_size
+                 ,n_input_units
+                 ,n_output_units
                  ,n_hidden_layers = 2
+                 ,n_hidden_units = 15
                  ,activation = tf.nn.relu
                  ,opt = tf.train.MomentumOptimizer
                  ,opt_kws = {'learning_rate':0.001,'momentum':0.5}
@@ -22,7 +25,10 @@ class q_network(object):
         self.discount_rate = discount_rate
         self.mem_size = mem_size
         self.sample_size = sample_size
+        self.n_input_units = n_input_units
+        self.n_output_units = n_output_units
         self.n_hidden_layers = n_hidden_layers
+        self.n_hidden_units = n_hidden_units
         self.activation = activation
         self.opt = opt(**opt_kws)
         self.memory = deque([],mem_size)
@@ -43,25 +49,25 @@ class q_network(object):
         
         hidden_dict = {}
         
-        input_layer = tf.placeholder(name='q_input', shape=(None,n_input),dtype=tf.float32)
+        input_layer = tf.placeholder(name='q_input', shape=(None,self.n_input_units),dtype=tf.float32)
 
         for n in range(1,self.n_hidden_layers+1):
             hidden_dict[n] = {}
             if n == 1:
-                hidden_dict[n]['weights'] = weight_matrix(n_input,n_hidden)
-                hidden_dict[n]['bias'] = bias_matrix(n_hidden)
+                hidden_dict[n]['weights'] = weight_matrix(self.n_input_units,self.n_hidden_units)
+                hidden_dict[n]['bias'] = bias_matrix(self.n_hidden_units)
                 hidden_dict[n]['layer'] = self.activation(tf.matmul(input_layer,hidden_dict[n]['weights']) + hidden_dict[n]['bias'])
             else:
-                hidden_dict[n]['weights'] = weight_matrix(n_hidden,n_hidden)
-                hidden_dict[n]['bias'] = bias_matrix(n_hidden)
+                hidden_dict[n]['weights'] = weight_matrix(self.n_hidden_units,self.n_hidden_units)
+                hidden_dict[n]['bias'] = bias_matrix(self.n_hidden_units)
                 hidden_dict[n]['layer'] = self.activation(tf.matmul(hidden_dict[n-1]['layer'],hidden_dict[n]['weights']) + hidden_dict[n]['bias'])
 
 
-        output_weights = weight_matrix(n_hidden,n_output)
-        output_bias = bias_matrix(n_output)
+        output_weights = weight_matrix(self.n_hidden_units,self.n_output_units)
+        output_bias = bias_matrix(self.n_output_units)
 
         output_pred = tf.matmul(hidden_dict[self.n_hidden_layers]['layer'],output_weights) + output_bias
-        output_truth = tf.placeholder(shape=(None,n_output),dtype=tf.float32)
+        output_truth = tf.placeholder(shape=(None,self.n_output_units),dtype=tf.float32)
 
         loss = tf.reduce_mean(tf.nn.l2_loss(output_truth - output_pred))
         
@@ -84,19 +90,15 @@ class q_network(object):
     def initialize_new_variables(self):
         self.sess.run(tf.global_variables_initializer())
         
-    def run_training(self,n_epochs, samples):
+    def run_training(self,n_epochs,states,coded_actions,transitions,rewards):
         """
-        'samples' is a tuple with all states, coded_actions, transitions, rewards.
-        'states' are the vectors of s as row vectors in matrix of samples.
-        'coded_actions' are a single 1-D vector of actions, encoded as index of
-            one-hot vector of actions, i.e. if one-hot = [0,1,0,0] then coded_output = 1.
-            This hack allows for easy generation of ground_truth samples. 
-        'transitions' are vectors of s' as row vectors in matrix of samples.
-        'rewards' are a single 1-D vector of rewards.
+            'states' are the vectors of s as row vectors in matrix of samples.
+            'coded_actions' are a single 1-D vector of actions, encoded as index of
+        one-hot vector of actions, i.e. if one-hot = [0,1,0,0] then coded_output = 1.
+        This hack allows for easy generation of ground_truth samples. 
+            'transitions' are vectors of s' as row vectors in matrix of samples.
+            'rewards' are a single 1-D vector of rewards.
         """
-        
-        states,coded_actions,transitions,rewards = samples
-        
         pbar = tqdm(range(n_epochs))
         _losses = []
         for _ in pbar:
@@ -114,51 +116,53 @@ class q_network(object):
         plt.plot(list(range(len(self.losses))),self.losses)
         plt.show()
         
-    def add_new_obvs(self,obvs):
-        for state,action,transition,reward in obvs:
-            self.memory.append([state,action,transition,reward])
-
+    def add_new_obvs(self,states, actions, transitions, rewards):
+        for i in range(len(states)):
+            self.memory.append([states[i], actions[i], transitions[i], rewards.T[i]])
             
-    def get_memory_sample(self, size = None):
-        if size:
-            _size = size
-        else:
-            _size = self.sample_size
-        idx = np.random.choice(range(_size),_size)
-        sample = np.array(self.memory)[idx]
-        return sample[:,0], sample[:,1], sample[:,2], sample[:,3]
+    def get_memory_sample(self, size):
+        states, actions, transitions, rewards = [], [], [], []
+        for sample in self.memory:
+            states.append(sample[0])
+            actions.append(sample[1])
+            transitions.append(sample[2])
+            rewards.append(sample[3])
+            
+        return np.array(states), np.array(actions), np.array(transitions), np.array(rewards).T
+            
         
         
 if __name__ == '__main__':
     
-    n_samples = 10000
-    n_input = 10
-    n_output = 5
-    n_hidden = 15
+    _n_samples = 20000
+    _n_input = 10
+    _n_output = 5
 
-    actions = np.random.binomial(n_output-1,[1/n_output],n_samples)
-    states = np.random.randn(n_input*n_samples).reshape(n_samples,n_input).astype(float)
-    transitions = np.random.randn(n_input*n_samples).reshape(n_samples,n_input).astype(float)
-    rewards = np.random.binomial(1,[1/5],n_samples)
+    actions = np.random.binomial(_n_output-1,[1/_n_output],_n_samples)
+    states = np.random.randn(_n_input*_n_samples).reshape(_n_samples,_n_input).astype(float)
+    transitions = np.random.randn(_n_input*_n_samples).reshape(_n_samples,_n_input).astype(float)
+    rewards = np.random.binomial(1,[1/5],_n_samples).reshape(1,-1)
 
     dqn = q_network(discount_rate = 0.9
                  ,mem_size = 5000
                  ,sample_size = 1000
-                 ,n_hidden_layers = 2
+                 ,n_input_units = _n_input
+                 ,n_output_units = _n_output
+                 ,n_hidden_layers = 3
+                 ,n_hidden_units = 64
                  ,activation = tf.nn.relu
                  ,opt = tf.train.MomentumOptimizer
                  ,opt_kws = {'learning_rate':0.0001,'momentum':0.2}
                  )
-   
+    
+    # TODO : add new obvs, and get sample from memory
+    #dqn.add_new_obvs()
     
     dqn.initialize_graph()
     dqn.open_session()
     dqn.initialize_new_variables()
     
-    dqn.add_new_obvs(zip(states,actions,transitions,rewards))
-    dqn.run_training(500, dqn.get_memory_sample())
-    dqn.plot_loss()
-    
-    dqn.add_new_obvs(zip(states,actions,transitions,rewards))
-    dqn.run_training(500, dqn.get_memory_sample())
+    dqn.add_new_obvs(states, actions, transitions, rewards)
+    _states, _actions, _transitions, _rewards = dqn.get_memory_sample(dqn.mem_size)
+    dqn.run_training(500, _states, _actions, _transitions, _rewards)
     dqn.plot_loss()
