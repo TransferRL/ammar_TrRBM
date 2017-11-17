@@ -4,6 +4,21 @@ from tqdm import tqdm
 from matplotlib import pyplot as plt
 from collections import deque
 
+def huber_loss(predictions, labels, delta):
+    """partially copied and modified from Tensorflow r1.4"""
+    error = tf.subtract(predictions, labels)
+    abs_error = tf.abs(error)
+    quadratic = tf.minimum(abs_error, delta)
+    # The following expression is the same in value as
+    # tf.maximum(abs_error - delta, 0), but importantly the gradient for the
+    # expression when abs_error == delta is 0 (for tf.maximum it would be 1).
+    # This is necessary to avoid doubling the gradient, since there is already a
+    # nonzero contribution to the gradient from the quadratic term.
+    linear = (abs_error - quadratic)
+    losses = 0.5 * quadratic**2 + delta * linear
+    return losses
+    
+
 class q_network(object):
     
     """
@@ -69,7 +84,7 @@ class q_network(object):
         output_pred = tf.matmul(hidden_dict[self.n_hidden_layers]['layer'],output_weights) + output_bias
         output_truth = tf.placeholder(shape=(None,self.n_output_units),dtype=tf.float32)
 
-        loss = tf.reduce_mean(tf.nn.l2_loss(output_truth - output_pred))
+        loss = tf.reduce_mean(tf.nn.l2_loss(output_pred-output_truth))
         
         all_variables = [hidden_dict[n]['weights'] for n in range(1,self.n_hidden_layers+1)] + [output_weights] + [hidden_dict[n]['bias'] for n in range(1,self.n_hidden_layers+1)] + [output_bias]
         opt_op = self.opt.minimize(loss, var_list = all_variables)
@@ -105,7 +120,9 @@ class q_network(object):
 
             bellman_trans_q = np.max(self.sess.run(self.output_pred, feed_dict= {self.input_layer:transitions}) ,axis=1)
 
-            ground_truth = self.sess.run(self.output_pred, feed_dict={self.input_layer:states})
+            #ground_truth = self.sess.run(self.output_pred, feed_dict={self.input_layer:states})
+            ground_truth = np.zeros(shape=(states.shape[0],self.output_pred.shape[1]),dtype=float)
+            
             ground_truth[list(range(len(states))),coded_actions] = rewards + (self.discount_rate * bellman_trans_q) #this is the bellman update for fitted q iteration, with all non-action outputs as the Q value that will be predicted by the current network - this negates any back-prop through these output nodes. 
 
             _, _loss = self.sess.run([self.opt_op,self.loss],feed_dict={self.input_layer:states, self.output_truth:ground_truth})

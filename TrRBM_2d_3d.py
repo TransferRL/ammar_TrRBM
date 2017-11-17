@@ -20,6 +20,32 @@ import datetime
 
 N_MAPPED = 5000
 target_env = ThreeDMountainCarEnv()
+_3d = True
+
+params_dictionary = {}
+params_dictionary["discount_rate"] = 0.9
+params_dictionary["mem_size"] = 400
+params_dictionary["sample_size"] = 200
+params_dictionary["n_hidden_layers"] = 2
+params_dictionary["n_hidden_units"] = 16
+params_dictionary["activation"] = tf.nn.relu
+params_dictionary["optimizer"] = tf.train.MomentumOptimizer
+params_dictionary["opt_kws"] = {'learning_rate':0.001,'momentum':0.2}
+params_dictionary["n_episodes"] = 100
+params_dictionary["n_epochs"] = 25
+params_dictionary["retrain_period"] = 1
+params_dictionary["epsilon"] = 0.5
+params_dictionary["epsilon_decay"] = 0.999
+params_dictionary["ini_steps_retrain"] = 50
+
+params_dictionary["TrRBM_hidden_units"] = 100
+params_dictionary["TrRBM_batch_size"] = 100, 
+params_dictionary["TrRBM_learning_rate"] = 0.000001,
+params_dictionary["TrRBM_num_epochs"] = 100, 
+params_dictionary["TrRBM_n_factors"] = 40,
+params_dictionary["TrRBM_k"] = 1,
+params_dictionary["TrRBM_use_tqdm"] = True,
+params_dictionary["TrRBM_show_err_plt"] = True
 
 def load_samples(path):
     with open(path, "rb") as f:
@@ -141,16 +167,16 @@ def main():
     rbm = trrbm.RBM(
         name = "TrRBM",
         v1_size = source_random.shape[1], 
-        h_size = 100, 
+        h_size = params_dictionary["TrRBM_hidden_units"], 
         v2_size = target_random.shape[1], 
         n_data = source_random.shape[0], 
-        batch_size = 100, 
-        learning_rate = 0.000001,
-        num_epochs = 100, 
-        n_factors = 40,
-        k = 1,
-        use_tqdm = True,
-        show_err_plt = True
+        batch_size = params_dictionary["TrRBM_hidden_units"], 
+        learning_rate = params_dictionary["TrRBM_learning_rate"],
+        num_epochs = params_dictionary["TrRBM_num_epochs"], 
+        n_factors = params_dictionary["TrRBM_n_factors"],
+        k = params_dictionary["TrRBM_k"],
+        use_tqdm = params_dictionary["TrRBM_use_tqdm"],
+        show_err_plt = params_dictionary["TrRBM_show_err_plt"]
     )
 
     # train the TrRBM model
@@ -185,16 +211,16 @@ def main():
 
     # use transferred tuples to learn initial target policy \pi_{T}^{o} (as Q network)
 
-    dqn = q_network(discount_rate = 0.9
-                 ,mem_size = 5000
-                 ,sample_size = 1000
+    dqn = q_network(discount_rate = params_dictionary["discount_rate"]
+                 ,mem_size = params_dictionary["mem_size"]
+                 ,sample_size = params_dictionary["sample_size"]
                  ,n_input_units = state_size
                  ,n_output_units = action_size
-                 ,n_hidden_layers = 2
-                 ,n_hidden_units = 32
-                 ,activation = tf.nn.relu
-                 ,opt = tf.train.MomentumOptimizer
-                 ,opt_kws = {'learning_rate':0.00001,'momentum':0.2}
+                 ,n_hidden_layers = params_dictionary["n_hidden_layers"]
+                 ,n_hidden_units = params_dictionary["n_hidden_units"]
+                 ,activation = params_dictionary["activation"]
+                 ,opt = params_dictionary["optimizer"]
+                 ,opt_kws = params_dictionary["opt_kws"]
                  )
 
     dqn.initialize_graph()
@@ -203,18 +229,19 @@ def main():
 
     dqn.add_new_obvs(target_states, target_actions, target_states_prime, rewards)
     _states, _actions, _transitions, _rewards = dqn.get_memory_sample(dqn.mem_size)
-    dqn.run_training(100, _states, _actions, _transitions, _rewards)
+    dqn.run_training(150, _states, _actions, _transitions, _rewards)
     dqn.plot_loss() 
 
 
     # use initial target policy and learn as we go
 
-    N_EPISODES = 500
-    N_EPOCHS = 5
-    RETRAIN_PERIOD = 100
-    EPSILON = 0.5
-    EPSILON_DECAY = 0.99
-    INI_STEPS_RETRAIN = 1000
+    N_EPISODES = params_dictionary["n_episodes"]
+    N_EPOCHS = params_dictionary["n_epochs"]
+    RETRAIN_PERIOD = params_dictionary["retrain_period"]
+    EPSILON = params_dictionary["epsilon"]
+    EPSILON_DECAY = params_dictionary["epsilon_decay"]
+    INI_STEPS_RETRAIN = params_dictionary["ini_steps_retrain"]
+    RENDER = render
 
     pbar = tqdm(range(N_EPISODES))
     episode_counter = collections.Counter()
@@ -228,17 +255,22 @@ def main():
         while True:
             steps_counter['steps'] += 1
             episode_counter[episode] += 1
-            state = np.array(target_env.state).reshape(1,-1)
             # epsilon-greedily take next action from network
             if np.random.random_sample() > EPSILON:
                 action = dqn.get_next_action(state)[0]
             else:
-                action = target_env.action_space.sample()
+                action = env.action_space.sample()
             next_state, reward, done, _ = target_env.step(action)
+            
+            print('episode:', episode, 'steps:', episode_counter[episode], 'state:', next_state)
             
             episode_total_reward[episode] += reward
             rewards.append(reward)
-            target_env.render_orthographic()
+            
+            if _3d == True and RENDER == True:
+                env.render_orthographic()
+            elif RENDER == True:
+                env.render()
             dqn.add_new_obvs(state.reshape(1,-1),np.array([action]).reshape(1,-1),next_state.reshape(1,-1),np.array(reward).reshape(1,-1))
             if steps_counter['steps'] == INI_STEPS_RETRAIN or (steps_counter['steps'] > INI_STEPS_RETRAIN and steps_counter['steps'] % RETRAIN_PERIOD == 0):
                 print(steps_counter['steps'])
@@ -246,16 +278,21 @@ def main():
                 dqn.run_training(N_EPOCHS, _states, _actions, _transitions, _rewards)
             #instances.append([state,action,next_state,reward,done])
             
+            if episode > 1:
+                EPSILON = EPSILON_DECAY*EPSILON
+                
             if done == True:
                 print('episode {} completed'.format(len(episode_counter)))
                 break
-                
-        EPSILON = EPSILON_DECAY*EPSILON
 
         if len(episode_counter) > 20 and np.all(np.array(list(episode_counter)[-20:]) <= 1000) == True:
             break
             
-        target_env.close_gui(
+        if _3d == True and RENDER == True:
+            #env.close_gui()
+            pass
+        elif RENDER == True:
+            env.close()
 
     # plot results
     
