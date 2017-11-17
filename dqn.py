@@ -114,21 +114,27 @@ class q_network(object):
             
     def plot_loss(self):
         plt.plot(list(range(len(self.losses))),self.losses)
+        plt.title('DQN loss')
+        plt.xlabel('epoch')
+        plt.ylabel('loss')
         plt.show()
         
     def add_new_obvs(self,states, actions, transitions, rewards):
         for i in range(len(states)):
-            self.memory.append([states[i], actions[i], transitions[i], rewards.T[i]])
+            self.memory.append([states[i], actions[i], transitions[i], rewards[i]])
             
     def get_memory_sample(self, size):
         states, actions, transitions, rewards = [], [], [], []
-        for sample in self.memory:
-            states.append(sample[0])
-            actions.append(sample[1])
-            transitions.append(sample[2])
-            rewards.append(sample[3])
+        for i in np.random.choice(range(len(self.memory)),size):
+            states.append(self.memory[i][0].astype(float))
+            actions.append(self.memory[i][1])
+            transitions.append(self.memory[i][2].astype(float))
+            rewards.append(self.memory[i][3])
             
-        return np.array(states), np.array(actions), np.array(transitions), np.array(rewards).T
+        return np.array(states), np.array(actions), np.array(transitions), np.array(rewards)
+    
+    def get_next_action(self,state):
+        return np.argmax(self.sess.run(self.output_pred, feed_dict={self.input_layer:state}) ,axis=1)
             
         
         
@@ -154,9 +160,6 @@ if __name__ == '__main__':
                  ,opt = tf.train.MomentumOptimizer
                  ,opt_kws = {'learning_rate':0.0001,'momentum':0.2}
                  )
-    
-    # TODO : add new obvs, and get sample from memory
-    #dqn.add_new_obvs()
     
     dqn.initialize_graph()
     dqn.open_session()
