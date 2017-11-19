@@ -84,7 +84,7 @@ class q_network(object):
         output_pred = tf.matmul(hidden_dict[self.n_hidden_layers]['layer'],output_weights) + output_bias
         output_truth = tf.placeholder(shape=(None,self.n_output_units),dtype=tf.float32)
 
-        loss = tf.reduce_mean(tf.nn.l2_loss(output_pred-output_truth))
+        loss = tf.reduce_sum(tf.reduce_mean((1/2)*((output_pred-output_truth)**2),axis=0))
         
         all_variables = [hidden_dict[n]['weights'] for n in range(1,self.n_hidden_layers+1)] + [output_weights] + [hidden_dict[n]['bias'] for n in range(1,self.n_hidden_layers+1)] + [output_bias]
         opt_op = self.opt.minimize(loss, var_list = all_variables)
@@ -120,8 +120,8 @@ class q_network(object):
 
             bellman_trans_q = np.max(self.sess.run(self.output_pred, feed_dict= {self.input_layer:transitions}) ,axis=1)
 
-            #ground_truth = self.sess.run(self.output_pred, feed_dict={self.input_layer:states})
-            ground_truth = np.zeros(shape=(states.shape[0],self.output_pred.shape[1]),dtype=float)
+            ground_truth = self.sess.run(self.output_pred, feed_dict={self.input_layer:states})
+            #ground_truth = np.zeros(shape=(states.shape[0],self.output_pred.shape[1]),dtype=float)
             
             ground_truth[list(range(len(states))),coded_actions] = rewards + (self.discount_rate * bellman_trans_q) #this is the bellman update for fitted q iteration, with all non-action outputs as the Q value that will be predicted by the current network - this negates any back-prop through these output nodes. 
 
@@ -143,12 +143,12 @@ class q_network(object):
     def get_memory_sample(self, size):
         states, actions, transitions, rewards = [], [], [], []
         for i in np.random.choice(range(len(self.memory)),size):
-            states.append(self.memory[i][0].astype(float))
+            states.append(self.memory[i][0])
             actions.append(self.memory[i][1])
-            transitions.append(self.memory[i][2].astype(float))
+            transitions.append(self.memory[i][2])
             rewards.append(self.memory[i][3])
             
-        return np.array(states), np.array(actions), np.array(transitions), np.array(rewards)
+        return np.array(states).astype(float), np.array(actions), np.array(transitions).astype(float), np.array(rewards)
     
     def get_next_action(self,state):
         return np.argmax(self.sess.run(self.output_pred, feed_dict={self.input_layer:state}) ,axis=1)

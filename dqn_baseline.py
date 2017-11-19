@@ -79,6 +79,8 @@ def main(env, exp_name, state_size, action_size, params_dictionary, _3d=False,re
                 action = env.action_space.sample()
             next_state, reward, done, _ = env.step(action)
             
+            state = np.array(next_state).reshape(1,-1)
+            
             print('episode:', episode, 'steps:', episode_counter[episode], 'state:', next_state)
             
             episode_total_reward[episode] += reward
@@ -88,28 +90,25 @@ def main(env, exp_name, state_size, action_size, params_dictionary, _3d=False,re
                 env.render_orthographic()
             elif RENDER == True:
                 env.render()
-            dqn.add_new_obvs(state.reshape(1,-1),np.array([action]).reshape(1,-1),next_state.reshape(1,-1),np.array(reward).reshape(1,-1))
+            dqn.add_new_obvs(state.reshape(1, -1), np.array([action]).reshape(1, -1), next_state.reshape(1, -1), np.array(reward).reshape(1, -1))
             if steps_counter['steps'] == INI_STEPS_RETRAIN or (steps_counter['steps'] > INI_STEPS_RETRAIN and steps_counter['steps'] % RETRAIN_PERIOD == 0):
                 print('training qnet')
-                _states, _actions, _transitions, _rewards = dqn.get_memory_sample(dqn.mem_size)
+                _states, _actions, _transitions, _rewards = dqn.get_memory_sample(dqn.sample_size)
+                print('gotten memory samples')
                 dqn.run_training(N_EPOCHS, _states, _actions, _transitions, _rewards)
-                
-            if (episode == 0 and episode_counter[episode] > 5000) or episode > 0:
-                EPSILON = EPSILON_DECAY*EPSILON
+              
+            EPSILON = EPSILON_DECAY*EPSILON
 
             if done == True:
                 print('episode {} completed'.format(len(episode_counter)))
                 break
                 
-            if episode_counter[episode] > 40000:
+            if episode_counter[episode] > 1000:
                 if _3d == True:
                     env.render_orthographic()
                 else:
                     env.render()
                 
-
-        if len(episode_counter) > 20 and np.all(np.array(list(episode_counter)[-20:]) <= 1000) == True:
-            break
             
         if _3d == True and RENDER == True:
             #env.close_gui()

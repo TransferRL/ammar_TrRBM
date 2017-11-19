@@ -8,8 +8,6 @@ ENVS_DICTIONARY = {
     '3DMountainCar':ThreeDMountainCarEnv
     ,'2DMountainCar':envs.make('MountainCar-v0')
     ,'CartPole':envs.make('CartPole-v1')
-#    ,'InvertedPendulum':envs.make('InvertedPendulum-v1')
-#    ,'DoublePendulum':envs.make('InvertedDoublePendulum-v1')
     
     }
 

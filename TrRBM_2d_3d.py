@@ -39,13 +39,15 @@ params_dictionary["epsilon_decay"] = 0.999
 params_dictionary["ini_steps_retrain"] = 50
 
 params_dictionary["TrRBM_hidden_units"] = 100
-params_dictionary["TrRBM_batch_size"] = 100, 
-params_dictionary["TrRBM_learning_rate"] = 0.000001,
-params_dictionary["TrRBM_num_epochs"] = 100, 
-params_dictionary["TrRBM_n_factors"] = 40,
-params_dictionary["TrRBM_k"] = 1,
-params_dictionary["TrRBM_use_tqdm"] = True,
+params_dictionary["TrRBM_batch_size"] = 100
+params_dictionary["TrRBM_learning_rate"] = 0.000001
+params_dictionary["TrRBM_num_epochs"] = 100
+params_dictionary["TrRBM_n_factors"] = 40
+params_dictionary["TrRBM_k"] = 1
+params_dictionary["TrRBM_use_tqdm"] = True
 params_dictionary["TrRBM_show_err_plt"] = True
+
+render = False
 
 def load_samples(path):
     with open(path, "rb") as f:
@@ -250,7 +252,7 @@ def main():
     instances = []
     rewards = []
     for episode in pbar:
-        target_env.reset()
+        state = np.array(target_env.reset()).reshape(1,-1)
         done = False
         while True:
             steps_counter['steps'] += 1
@@ -259,8 +261,10 @@ def main():
             if np.random.random_sample() > EPSILON:
                 action = dqn.get_next_action(state)[0]
             else:
-                action = env.action_space.sample()
+                action = target_env.action_space.sample()
             next_state, reward, done, _ = target_env.step(action)
+            
+            state = np.array(next_state).reshape(1,-1)
             
             print('episode:', episode, 'steps:', episode_counter[episode], 'state:', next_state)
             
