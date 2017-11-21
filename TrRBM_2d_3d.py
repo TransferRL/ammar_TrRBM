@@ -237,7 +237,7 @@ def main():
     # build target policy Q value function approximator
     model = deepq.models.mlp([64], layer_norm=True)
     dq = deepq_mod.DeepQ(
-        env,
+        target_env,
         q_func=model,
         lr=1e-3,
         max_timesteps=80000,
