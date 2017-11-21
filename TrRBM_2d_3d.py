@@ -48,7 +48,7 @@ params_dictionary["ini_steps_retrain"] = 50
 params_dictionary["TrRBM_hidden_units"] = 100
 params_dictionary["TrRBM_batch_size"] = 100
 params_dictionary["TrRBM_learning_rate"] = 0.000001
-params_dictionary["TrRBM_num_epochs"] = 100
+params_dictionary["TrRBM_num_epochs"] = 10
 params_dictionary["TrRBM_n_factors"] = 40
 params_dictionary["TrRBM_k"] = 1
 params_dictionary["TrRBM_use_tqdm"] = True
@@ -253,7 +253,7 @@ def main():
     for _ in range(5):
         # use transferred tuples to learn initial target policy \pi_{T}^{o}
         dq.initialize()
-        dq.transfer_pretrain(zip(list(target_states), list(target_actions), list(rewards), list(target_states_prime))
+        dq.transfer_pretrain(zip(list(target_states), list(target_actions.squeeze()), list(rewards.squeeze()), list(target_states_prime))
                              ,epochs = 100
                              ,tr_batch_size = 32
                              ,keep_in_replay_buffer=True
