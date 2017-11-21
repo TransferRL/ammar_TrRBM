@@ -2,31 +2,24 @@ import numpy as np
 import tensorflow as tf
 import pickle
 from sklearn.preprocessing import OneHotEncoder
-from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import RBF
 from matplotlib import pyplot as plt
 import gym
 from tqdm import tqdm
 import collections
 
-
 import sys
 sys.path.append('../taylor_master/lib/env/')
 from threedmountain_car import ThreeDMountainCarEnv
 
-sys.path.append('../baselines/baselines/')
-import deepq
-
-import deepq_mod
+from dqn import q_network
 import trrbm
 import utils
-from envs import ENVS_DICTIONARY
 
 import pickle
 import datetime
 
 N_MAPPED = 5000
-target_env = ENVS_DICTIONARY['3DMountainCar']()
+target_env = ThreeDMountainCarEnv()
 _3d = True
 
 params_dictionary = {}
@@ -152,20 +145,7 @@ def generate_rewards(env,states,actions):
         rewards.append(reward)
     return np.array(rewards).reshape(-1,1)
     
-def plot_with_gp(X,y,title='',xlabel='',ylabel=''):
-    kernel = 1.0 * RBF(length_scale=1.0, length_scale_bounds=(1e-1, 10.0))
-    gp = GaussianProcessRegressor(kernel=kernel)
-    gp.fit(X, y)
-    X_ = np.linspace(min(X), max(X), 100)
-    y_mean, y_std = gp.predict(X_[:, np.newaxis], return_std=True)
 
-    plt.plot(X_, y_mean, 'k', lw=3, zorder=9)
-    plt.fill_between(X_, y_mean - y_std, y_mean + y_std,
-                         alpha=0.2, color='k')
-    plt.title(title)
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
-    plt.show()
     
 def main():
     
@@ -234,53 +214,122 @@ def main():
     
     # TODO: one alternative to getting rewards from black-box model may be using (normalized?) Q values from source task
 
-    # build target policy Q value function approximator
-    model = deepq.models.mlp([64], layer_norm=True)
-    dq = deepq_mod.DeepQ(
-        env,
-        q_func=model,
-        lr=1e-3,
-        max_timesteps=80000,
-        buffer_size=50000,
-        exploration_fraction=0.1,
-        exploration_final_eps=0.1,
-        print_freq=10,
-        param_noise=True)
-    dq.make_build_train()
-    
-    # run multiple experiments with the same transfer instances
-    experiments = []
-    for _ in range(5):
-        # use transferred tuples to learn initial target policy \pi_{T}^{o}
-        dq.initialize()
-        dq.transfer_pretrain(zip(list(target_states), list(target_actions), list(rewards), list(target_states_prime))
-                             ,epochs = 100
-                             ,tr_batch_size = 32
-                             ,keep_in_replay_buffer=True
-                             )
+    # use transferred tuples to learn initial target policy \pi_{T}^{o} (as Q network)
 
-        # use initial target policy and learn as we go
-        act, episode_rewards, episode_steps = dq.task_train()
-        experiments.append((episode_rewards,episode_steps))
+    dqn = q_network(discount_rate = params_dictionary["discount_rate"]
+                 ,mem_size = params_dictionary["mem_size"]
+                 ,sample_size = params_dictionary["sample_size"]
+                 ,n_input_units = state_size
+                 ,n_output_units = action_size
+                 ,n_hidden_layers = params_dictionary["n_hidden_layers"]
+                 ,n_hidden_units = params_dictionary["n_hidden_units"]
+                 ,activation = params_dictionary["activation"]
+                 ,opt = params_dictionary["optimizer"]
+                 ,opt_kws = params_dictionary["opt_kws"]
+                 )
 
-    
+    dqn.initialize_graph()
+    dqn.open_session()
+    dqn.initialize_new_variables()
+
+    dqn.add_new_obvs(target_states, target_actions, target_states_prime, rewards)
+    _states, _actions, _transitions, _rewards = dqn.get_memory_sample(dqn.mem_size)
+    dqn.run_training(150, _states, _actions, _transitions, _rewards)
+    dqn.plot_loss() 
+
+
+    # use initial target policy and learn as we go
+
+    N_EPISODES = params_dictionary["n_episodes"]
+    N_EPOCHS = params_dictionary["n_epochs"]
+    RETRAIN_PERIOD = params_dictionary["retrain_period"]
+    EPSILON = params_dictionary["epsilon"]
+    EPSILON_DECAY = params_dictionary["epsilon_decay"]
+    INI_STEPS_RETRAIN = params_dictionary["ini_steps_retrain"]
+    RENDER = render
+
+    pbar = tqdm(range(N_EPISODES))
+    episode_counter = collections.Counter()
+    episode_total_reward = collections.Counter()
+    steps_counter = collections.Counter()
+    instances = []
+    rewards = []
+    for episode in pbar:
+        state = np.array(target_env.reset()).reshape(1,-1)
+        done = False
+        while True:
+            steps_counter['steps'] += 1
+            episode_counter[episode] += 1
+            # epsilon-greedily take next action from network
+            if np.random.random_sample() > EPSILON:
+                action = dqn.get_next_action(state)[0]
+            else:
+                action = target_env.action_space.sample()
+            next_state, reward, done, _ = target_env.step(action)
+            
+            state = np.array(next_state).reshape(1,-1)
+            
+            print('episode:', episode, 'steps:', episode_counter[episode], 'state:', next_state)
+            
+            episode_total_reward[episode] += reward
+            rewards.append(reward)
+            
+            if _3d == True and RENDER == True:
+                env.render_orthographic()
+            elif RENDER == True:
+                env.render()
+            dqn.add_new_obvs(state.reshape(1,-1),np.array([action]).reshape(1,-1),next_state.reshape(1,-1),np.array(reward).reshape(1,-1))
+            if steps_counter['steps'] == INI_STEPS_RETRAIN or (steps_counter['steps'] > INI_STEPS_RETRAIN and steps_counter['steps'] % RETRAIN_PERIOD == 0):
+                print(steps_counter['steps'])
+                _states, _actions, _transitions, _rewards = dqn.get_memory_sample(dqn.mem_size)
+                dqn.run_training(N_EPOCHS, _states, _actions, _transitions, _rewards)
+            #instances.append([state,action,next_state,reward,done])
+            
+            if episode > 1:
+                EPSILON = EPSILON_DECAY*EPSILON
+                
+            if done == True:
+                print('episode {} completed'.format(len(episode_counter)))
+                break
+
+        if len(episode_counter) > 20 and np.all(np.array(list(episode_counter)[-20:]) <= 1000) == True:
+            break
+            
+        if _3d == True and RENDER == True:
+            #env.close_gui()
+            pass
+        elif RENDER == True:
+            env.close()
+
     # plot results
-    X, rewards, steps = [], [], []
-    for episode_rewards, episode_steps in experiments:
-        X += [i for i in range(len(episode_steps))]
-        rewards += episode_rewards
-        steps += episode_steps
     
-    X = np.array(X).reshape(-1,1)
+    avg_rewards = np.array(list(episode_counter.values()))/np.array(list(episode_total_reward.values()))
+    plt.scatter(list(episode_counter.keys()),avg_rewards)
+    plt.title('avg reward over episodes')
+    plt.xlabel('episode')
+    plt.ylabel('mean reward')
+    plt.show()
+    
+    plt.scatter(list(episode_counter.keys()),list(episode_counter.values()))
+    plt.title('steps per episode')
+    plt.xlabel('episode')
+    plt.ylabel('steps')
+    plt.show()
+    
 
-    plot_with_gp(X, rewards, title='reward per episode - with transfer',xlabel='episode',ylabel='reward')
-    plot_with_gp(X, steps, title='steps per episode - with transfer',xlabel='episode',ylabel='reward')
-   
-     
- 
     # output results for persistance
-    # TODO
+    output = {'description':'this is a description of the experiment'
+              ,'rewards':rewards
+              ,'episode_counter':episode_counter
+              ,'episode_total_reward':episode_total_reward
+              ,'params':{}}
+
+    file = 'exp_data/TrRBM_exp_{}.p'.format(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+    with open(file, 'wb') as f:
+        pickle.dump(output,f)
+    
+    print('DONE!')
     
 if __name__ == '__main__':
-    main()
+    instances, episode_counter =  main()
     print('done')

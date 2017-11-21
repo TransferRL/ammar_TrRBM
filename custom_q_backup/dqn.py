@@ -71,11 +71,13 @@ class q_network(object):
             if n == 1:
                 hidden_dict[n]['weights'] = weight_matrix(self.n_input_units,self.n_hidden_units)
                 hidden_dict[n]['bias'] = bias_matrix(self.n_hidden_units)
-                hidden_dict[n]['layer'] = self.activation(tf.matmul(input_layer,hidden_dict[n]['weights']) + hidden_dict[n]['bias'])
+                hidden_dict[n]['batch_norm'] = tf.contrib.layers.layer_norm(tf.matmul(input_layer, hidden_dict[n]['weights']) + hidden_dict[n]['bias'], center=True, scale=True)
+                hidden_dict[n]['layer'] = self.activation(hidden_dict[n]['batch_norm'])
             else:
                 hidden_dict[n]['weights'] = weight_matrix(self.n_hidden_units,self.n_hidden_units)
                 hidden_dict[n]['bias'] = bias_matrix(self.n_hidden_units)
-                hidden_dict[n]['layer'] = self.activation(tf.matmul(hidden_dict[n-1]['layer'],hidden_dict[n]['weights']) + hidden_dict[n]['bias'])
+                hidden_dict[n]['batch_norm'] = tf.contrib.layers.layer_norm(tf.matmul(hidden_dict[n-1]['layer'],hidden_dict[n]['weights']) + hidden_dict[n]['bias'], center=True, scale=True)
+                hidden_dict[n]['layer'] = self.activation(hidden_dict[n]['batch_norm'])
 
 
         output_weights = weight_matrix(self.n_hidden_units,self.n_output_units)
