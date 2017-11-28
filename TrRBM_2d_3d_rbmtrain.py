@@ -174,7 +174,7 @@ def plot_with_gp(X, y, title='', xlabel='', ylabel='', plt_lable='', color='b'):
     #plt.show()
 
 
-def train_dqn(target_states, target_actions, rewards, target_states_prime, with_transfer=True):
+def train_dqn(target_states, target_actions, rewards, target_states_prime, with_transfer=True, max_episodes=100):
 
     # run multiple experiments with the same transfer instances
     model = deepq.models.mlp([64], layer_norm=True)
@@ -188,7 +188,7 @@ def train_dqn(target_states, target_actions, rewards, target_states_prime, with_
         exploration_fraction=0.1,
         exploration_final_eps=0.1,
         print_freq=10,
-        param_noise=False, max_episodes=20)
+        param_noise=False, max_episodes=max_episodes)
 
         # use transferred tuples to learn initial target policy \pi_{T}^{o}
 
@@ -280,11 +280,11 @@ def main():
     # TODO: one alternative to getting rewards from black-box model may be using (normalized?) Q values from source task
 
     # build target policy Q value function approximator
-
-    m_rewards, steps = train_dqn(target_states, target_actions, rewards, target_states_prime, with_transfer=True)
-
-    with open('exp_data/mountainCarTransfer.pkl', 'wb') as f:
-        pickle.dump([m_rewards, steps], f)
+    #
+    # m_rewards, steps = train_dqn(target_states, target_actions, rewards, target_states_prime, with_transfer=True)
+    #
+    # with open('exp_data/mountainCarTransfer.pkl', 'wb') as f:
+    #     pickle.dump([m_rewards, steps], f)
 
 
     # output results for persistance
