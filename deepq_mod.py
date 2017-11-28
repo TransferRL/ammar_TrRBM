@@ -370,6 +370,16 @@ class DeepQ(object):
                     logger.log("Restored model with mean reward: {}".format(self.saved_mean_reward))
                 U.load_state(model_file)
         return self.act, self.episode_rewards, self.episode_steps
+    
+    
+    def get_q_values(self,obs):
+        '''
+        Input:
+            obs should be a numpy array with shape (?,state_space)
+        Output:
+            returns Q values for each possible action with shape (?,action_space)
+        '''
+        return self.debug['q_values'](obs)
 
     
 def main():
